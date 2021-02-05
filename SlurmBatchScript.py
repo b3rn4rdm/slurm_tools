@@ -21,18 +21,18 @@ class SlurmBatchScript:
         return
 
 
-    def initialize(self, slurm_job_name, input_dir, input_file_name, input_file_list, 
-                   output_dir, output_file_name, output_file_list, scratch_dir, program, args, 
+    def initialize(self, slurm_job_name, input_dir, input_file_name, extra_input_files, 
+                   output_dir, output_file_name, extra_output_files, scratch_dir, program, args, 
                    time='2:00:00', slurm_job_partition='normal',
                    slurm_cpus_per_task=1, add_slurm_id2input=False):
         self.text = []
         self.slurm_job_name = slurm_job_name
         self.input_dir = input_dir
         self.input_file_name = input_file_name
-        self.input_file_list = input_file_list
+        self.extra_input_files = extra_input_files
         self.output_dir = output_dir
         self.output_file_name = output_file_name
-        self.output_file_list = output_file_list
+        self.extra_output_files = extra_output_files
         self.scratch_dir = f'{scratch_dir}{slurm_job_name}/'
         self.program = program
         self.args = args
@@ -89,7 +89,7 @@ class SlurmBatchScript:
         self.text.append('# create scratch dir and move input files over there\n')
         self.text.append(f'mkdir -p {self.scratch_dir}')
         self.text.append(f'cp {self.input_dir}{self.input_file_name} {self.scratch_dir}')
-        for fi in self.input_file_list:
+        for fi in self.extra_input_files:
             self.text.append(f'cp {self.input_dir}{fi} {self.scratch_dir}')
         self.text.append('\n')
 
@@ -99,7 +99,8 @@ class SlurmBatchScript:
 
         # fetch output files
         self.text.append('# fetch the output files back\n')
-        for f in self.output_file_list:
+        self.text.append(f'cp {self.scratch_dir}{self.output_file_name} {self.output_dir}')
+        for f in self.extra_output_files:
             self.text.append(f'cp {self.scratch_dir}{f} {self.output_dir}')
         self.text.append('\n')
 
