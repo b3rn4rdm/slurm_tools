@@ -13,7 +13,7 @@ if [[ "$1" == --* ]]
 then
 	if [ "$1" == "--update" ]
 	then
-		update_commands="qmlrec"
+		update_commands="qmlrec" # KK: 'qmlrec' is a bash script that recompiles QML.
 	fi
 	shift
 fi
@@ -68,7 +68,7 @@ cat > ex_$job_name.sh << EOF
 
 $update_commands
 export OMP_NUM_THREADS=$NCPUs
-export OML_NUM_PROCS=$NCPUs
+export OML_NUM_PROCS=$NCPUs # used for parallelization in OML-related modules.
 cd \$SCRATCH_DIR
 echo "Started: \$(date)" > execution_time.txt
 python $script_path ${@:3}
