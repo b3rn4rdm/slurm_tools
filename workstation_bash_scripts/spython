@@ -55,7 +55,7 @@ script_path=${scripts[0]}
 
 cd $data_dir
 
-NCPUs=$OMP_NUM_THREADS
+NCPUs=$(cat /etc/slurm-llnl/slurm.conf | tr ' ' '\n' | awk 'BEGIN {FS="="} {if ($1=="CPUs") print $2}')
 
 cat > ex_$job_name.sh << EOF
 #!/bin/bash
