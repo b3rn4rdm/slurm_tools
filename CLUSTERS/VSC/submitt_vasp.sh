@@ -4,7 +4,6 @@
 #SBATCH --mail-user=janweinreich286@googlemail.com
 #SBATCH -N 1
 #SBATCH --ntasks-per-core=1
-#SBATCH --ntasks-per-node=96
 
 # Problem we have 96 CPU but want to start smaller
 # subjobs with say 24 CPUs for each subjob!
