@@ -9,14 +9,25 @@
 # 2nd argument - how the SLURM job is named.
 # Arguments starting from third (if present) - arguments for the python script.
 
-if [[ "$1" == --* ]]
-then
-	if [ "$1" == "--update" ]
-	then
-		update_commands="qmlrec" # KK: 'qmlrec' is a bash script that recompiles QML.
-	fi
-	shift
-fi
+NCPUs=$(cat /etc/slurm-llnl/slurm.conf | tr ' ' '\n' | awk 'BEGIN {FS="="} {if ($1=="CPUs") print $2}')
+JOB_OMP_NUM_THREADS=$NCPUs
+
+while [[ "$1" == --* ]]
+do
+    if [ "$1" == "--update" ]
+    then
+        update_commands="qmlrec"
+    fi
+    if [[ "$1" == --CPUs=* ]]
+    then
+        NCPUs=$(echo $1 | cut -d'=' -f2)
+    fi
+    if [[ "$1" == --OMP_NUM_THREADS=* ]]
+    then
+        JOB_OMP_NUM_THREADS=$(echo $1 | cut -d'=' -f2)
+    fi
+    shift
+done
 
 py_script=$1
 
@@ -55,8 +66,6 @@ script_path=${scripts[0]}
 
 cd $data_dir
 
-NCPUs=$(cat /etc/slurm-llnl/slurm.conf | tr ' ' '\n' | awk 'BEGIN {FS="="} {if ($1=="CPUs") print $2}')
-
 cat > ex_$job_name.sh << EOF
 #!/bin/bash
 #SBATCH -J $job_name
@@ -66,14 +75,16 @@ cat > ex_$job_name.sh << EOF
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=$NCPUs
 
+$(mod_load_string)
+
 $update_commands
-export OMP_NUM_THREADS=$NCPUs
-export OML_NUM_PROCS=$NCPUs # used for parallelization in OML-related modules.
+export OMP_NUM_THREADS=$JOB_OMP_NUM_THREADS
+export OML_NUM_PROCS=$NCPUs
 cd \$SCRATCH_DIR
 echo "Started: \$(date)" > execution_time.txt
 python $script_path ${@:3}
 echo "Finished: \$(date)" >> execution_time.txt
-cp * $data_dir
+cp -r * $data_dir
 
 EOF
 
