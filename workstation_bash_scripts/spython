@@ -13,17 +13,15 @@ function flag_val(){
     echo $1 | cut -d'=' -f2
 }
 
-NCPUs=$(cat /etc/slurm-llnl/slurm.conf | tr ' ' '\n' | awk 'BEGIN {FS="="} {if ($1=="CPUs") print $2}')
+NCPUs=$(cat /etc/slurm/slurm.conf | tr ' ' '\n' | awk 'BEGIN {FS="="} {if ($1=="CPUs") print $2}')
 JOB_OMP_NUM_THREADS=$NCPUs
 
 USE_CURRENT_DIR=0
+conda_env=$CONDA_DEFAULT_ENV
+PIPE_ARGS=0
 
 while [[ "$1" == --* ]]
 do
-    if [ "$1" == "--update" ]
-    then
-        update_commands="qmlrec"
-    fi
     if [[ "$1" == --CPUs=* ]]
     then
         NCPUs=$(flag_val $1)
@@ -40,6 +38,10 @@ do
     then
         JOB_OMP_NUM_THREADS=$(flag_val $1)
     fi
+    if [ "$1" == "--pipe_args" ]
+    then
+        PIPE_ARGS=1
+    fi
     shift
 done
 
@@ -51,7 +53,19 @@ then
 	exit
 fi
 
-job_name=$2
+if [ "$PIPE_ARGS" == "1" ]
+then
+    arg_command="cat"
+else
+    arg_command="echo ${@:2}"
+fi
+
+eval "$arg_command" | while read args
+do
+
+job_name=$(echo $args | cut -d' ' -f1)
+
+other_args=$(echo $args | cut -d' ' -f2-)
 
 if [ "$job_name" == "" ]
 then
@@ -80,7 +94,11 @@ script_path=${scripts[0]}
 
 cd $data_dir
 
-cat > ex_$job_name.sh << EOF
+
+
+EXNAME=ex_$job_name.sh
+
+cat > $EXNAME << EOF
 #!/bin/bash
 #SBATCH -J $job_name
 #SBATCH -o $job_name.stdout_%j
@@ -89,31 +107,43 @@ cat > ex_$job_name.sh << EOF
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=$NCPUs
 
-$(mod_load_string)
 
-if [ "$conda_env" != "" ]
-then
-    conda activate $conda_env
-fi
+source "$(grep __conda_setup ~/.bashrc | head -n1 | cut -d"'" -f2 | rev | cut -d"/" -f3- | rev)/etc/profile.d/conda.sh"
+conda activate $conda_env
 
-$update_commands
-export OMP_NUM_THREADS=$JOB_OMP_NUM_THREADS
-export OML_NUM_PROCS=$NCPUs
-if [ "$USE_CURRENT_DIR" == "0" ]
+EOF
+
+for NTHREAD_VAR in "OMP_NUM_THREADS" "OPENBLAS_NUM_THREADS" "MKL_NUM_THREADS" "VECLIB_MAXIMUM_THREADS" "NUMEXPR_NUM_THREADS" "NUMBA_NUM_THREADS"
+do
+    echo "export $NTHREAD_VAR=$JOB_OMP_NUM_THREADS" >> $EXNAME
+done
+
+cat >> $EXNAME << EOF
+export BMAPQML_NUM_PROCS=$NCPUs
+
+USE_CURRENT_DIR=$USE_CURRENT_DIR
+
+if [ "\$USE_CURRENT_DIR" == "0" ]
 then
     cd \$SCRATCH_DIR
     output_dir="."
 else
-    output_dir=$(pwd)
-    cd $(pwd)/..
+    output_dir=$data_dir
+    cd $data_dir
 fi
 echo "Started: \$(date)" > \$output_dir/execution_time.txt
-python $script_path ${@:3}
+python $script_path $other_args
 echo "Finished: \$(date)" >> \$output_dir/execution_time.txt
-if [ "$USE_CURRENT_DIR" == "0" ]
+if [ "\$USE_CURRENT_DIR" == "0" ]
 then
     cp -r * $data_dir
 fi
 EOF
 
-sbatch ex_$job_name.sh
+SLURM_ID=$(sbatch $DEPSTRING $EXNAME | awk '{print $4}')
+
+DEPSTRING="--dependency=afterok:$SLURM_ID"
+
+cd ..
+
+done
