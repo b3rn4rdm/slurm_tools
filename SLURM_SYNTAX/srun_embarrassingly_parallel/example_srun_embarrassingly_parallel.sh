@@ -7,7 +7,7 @@ import random, sys, os
 
 seed=os.environ["SLURM_LOCALID"]
 
-random.seed()
+random.seed(int(seed))
 output=open(os.path.dirname(os.path.realpath(__file__))+"/rng_"+str(seed), "w")
 for _ in range(1000):
     print(random.random(), file=output)
